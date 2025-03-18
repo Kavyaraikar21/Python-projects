@@ -78,37 +78,26 @@ def get_reviews(url, num_pages):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36"
     }
     all_reviews = []
-    unique_reviews = set()  # Set to store unique reviews
-
     try:
         for page_num in range(1, num_pages + 1):
             # Construct the URL for the current page
             page_url = f"{url}&pageNumber={page_num}" if '?' in url else f"{url}?pageNumber={page_num}"
-            
+
             response = requests.get(page_url, headers=headers)
             response.raise_for_status()  # Raise HTTPError for bad responses
             soup = BeautifulSoup(response.content, 'html.parser')
-            
+
             # Find all review elements
             review_elements = soup.find_all('span', {'data-hook': 'review-body'})
             rating_elements = soup.find_all('i', {'data-hook': 'review-star-rating'})
 
-            if not review_elements or not rating_elements:
-                break  # Break the loop if no reviews are found on the current page
-            
             for element, rating_element in zip(review_elements, rating_elements):
                 review_text = element.get_text().strip()
-                
-                # Skip if the review is already added
-                if review_text in unique_reviews:
-                    continue
-                unique_reviews.add(review_text)
-                
                 # Remove Read more
                 review_text = review_text.replace("Read more", "").strip()
                 review_text = review_text.replace("Read More", "").strip()
                 review_text = review_text.replace("Read more", "").strip()
-                
+
                 rating_text = rating_element.get_text().strip()
                 rating = float(re.search(r'\d\.\d', rating_text).group())
 
@@ -137,8 +126,8 @@ def create_pie_chart(sentiments):
     sentiment_counts = sentiments.value_counts()
     labels = sentiment_counts.index
     sizes = sentiment_counts.values
-    plt.figure(figsize=(10, 5),frameon=False)
-    plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=140, colors=['green', 'red', 'blue'])
+    plt.figure(figsize=(10, 5))
+    plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=140, colors=['green', 'blue', 'red'])
     plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
     st.pyplot(plt)
 
@@ -148,7 +137,7 @@ def create_bar_chart(sentiments):
     sentiment_df = pd.DataFrame({'Sentiment': sentiment_counts.index, 'Count': sentiment_counts.values})
     fig = px.bar(sentiment_df, x='Sentiment', y='Count',
                  color='Sentiment',  # Color bars by sentiment
-                 color_discrete_map={'Positive': 'green', 'Neutral': 'red', 'Negative': 'blue'}, # Set bar colors
+                 color_discrete_map={'Positive': 'green', 'Neutral': 'blue', 'Negative': 'red'}, # Set bar colors
                  labels={'Count': 'Number of Reviews', 'Sentiment': 'Sentiment Type'},  # Axis labels
                  title='Sentiment Distribution')
 
@@ -163,7 +152,7 @@ def display_sentiment_box(sentiment):
     else:
         color_code = 'rgba(0, 0, 255, 0.3)'  # Blue with 30% opacity
 
-    st.markdown(f'<div style="background-color:{color_code}; color:white; padding:5px; border-radius:5px;"><b>{sentiment}</b></div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="background-color:{color_code}; color:white; padding:5px; border-radius:5px;">{sentiment}</div>', unsafe_allow_html=True)
 
 # Function to display star rating
 def display_star_rating(rating):
@@ -206,7 +195,7 @@ def search_product():
     st.subheader("Search for a Product")
     category = st.selectbox("Select a category:", ['Select Category'] + list(df['Category'].unique())) # Add "Select Category"
     if category != 'Select Category':
-        products_in_category = df[df['Category'] == category]['product_name'].unique()
+        products_in_category = df[df['Category'] == category]['product_name']
         selected_product = st.selectbox("Select a product:", ['Select Product'] + list(products_in_category))# Add "Select Product"
         if selected_product != 'Select Product':
             product_details = df[(df['Category'] == category) & (df['product_name'] == selected_product)].iloc[0]
@@ -260,7 +249,7 @@ def enter_product_url():
     #Take input after user enter URL
     if product_url:
 
-        num_pages_to_scrape = st.slider("Number of Review Pages to Scrape:", min_value=1, max_value=10, value=5, step=1)
+        num_pages_to_scrape = st.slider("Number of Review Pages to Scrape:", min_value=1, max_value=10, value=3, step=1)
 
         if st.button("Fetch Reviews"):
             if product_url:
@@ -302,7 +291,7 @@ def enter_product_url():
 # Import CSV Page
 def import_csv():
     st.subheader("Import CSV File")
-    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+    uploaded_file = st.file_uploader("Choose a CSV file(should contain review and rating columns)", type="csv")
     
     if uploaded_file is not None:
         try:
