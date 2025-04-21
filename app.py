@@ -17,13 +17,41 @@ try:
 except LookupError:
     nltk.download('vader_lexicon')
 
+@st.cache_data
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+def set_png_as_page_bg(png_file):
+    bin_str = get_base64_of_bin_file(png_file)
+    page_bg_img = f'''
+    <style>
+    .stApp {{
+        background-image: url("data:image/jpg;base64,{bin_str}");
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        background-position: center;
+    }}
+
+    /* ✅ Ensure the Streamlit Settings Menu is Visible */
+    [data-testid="stToolbar"] {{
+        visibility: visible !important;
+        display: block !important;
+    }}
+    </style>
+    '''
+    
+    st.markdown(page_bg_img, unsafe_allow_html=True)
+
+set_png_as_page_bg('bg.jpg')
 
 # Function to get image as base64
 def get_img_as_base64(file):
     with open(file, "rb") as f:
         data = f.read()
     return base64.b64encode(data).decode()
-
 
 # Convert image to base64
 img = get_img_as_base64("images1.jpg")
@@ -73,6 +101,8 @@ def classify_sentiment(compound_score):
         return 'Neutral'
 
 # Function to scrape reviews from a given URL for a given number of pages
+
+
 def get_reviews(url, num_pages):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36"
@@ -80,37 +110,34 @@ def get_reviews(url, num_pages):
     all_reviews = []
     try:
         for page_num in range(1, num_pages + 1):
-            # Construct the URL for the current page
-            page_url = f"{url}&pageNumber={page_num}" if '?' in url else f"{url}?pageNumber={page_num}"
+            page_url = construct_url(url, page_num)
 
             response = requests.get(page_url, headers=headers)
-            response.raise_for_status()  # Raise HTTPError for bad responses
+            response.raise_for_status()
             soup = BeautifulSoup(response.content, 'html.parser')
 
-            # Find all review elements
+            # Extract reviews and ratings
             review_elements = soup.find_all('span', {'data-hook': 'review-body'})
             rating_elements = soup.find_all('i', {'data-hook': 'review-star-rating'})
 
             for element, rating_element in zip(review_elements, rating_elements):
-                review_text = element.get_text().strip()
-                # Remove Read more
-                review_text = review_text.replace("Read more", "").strip()
-                review_text = review_text.replace("Read More", "").strip()
-                review_text = review_text.replace("Read more", "").strip()
-
+                review_text = element.get_text().strip().replace("Read more", "").replace("Read More", "").strip()
+                
                 rating_text = rating_element.get_text().strip()
-                rating = float(re.search(r'\d\.\d', rating_text).group())
+                match = re.search(r'\d\.\d', rating_text)
+                rating = float(match.group()) if match else None
 
                 all_reviews.append((review_text, rating))
 
-            time.sleep(1)  # Add delay to avoid being blocked
+            print(f"Fetched page {page_num} successfully.")
+            time.sleep(1)
+
     except requests.exceptions.RequestException as e:
-        st.error(f"Failed to fetch reviews from page {page_num}: {e}")
+        print(f"Failed to fetch reviews from page {page_num}: {e}")
     except Exception as e:
-        st.error(f"Error parsing reviews from page {page_num}: {e}")
+        print(f"Error parsing reviews from page {page_num}: {e}")
 
     return all_reviews
-
 
 # Function to create a word cloud from text
 def create_wordcloud(text):
