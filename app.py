@@ -8,7 +8,7 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import base64
-import re  # Import the regular expression module
+import re 
 import plotly.express as px
 
 # Download required NLTK data (only needs to be done once)
@@ -90,7 +90,6 @@ def get_sentiment(review):
     vs = analyzer.polarity_scores(review)
     return vs['compound']  # Use compound score for overall sentiment
 
-
 # Function to classify sentiment based on VADER's compound score
 def classify_sentiment(compound_score):
     if compound_score >= 0.05:  # Threshold adjusted for better accuracy
@@ -100,18 +99,66 @@ def classify_sentiment(compound_score):
     else:
         return 'Neutral'
 
+# # Function to scrape reviews and ratings from a given URL for a given number of pages
+# def get_reviews(url, num_pages=2):
+#     headers = {
+#         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36"
+#     }
+#     all_reviews = []
+#     all_ratings = []
+#     try:
+#         for page_num in range(1, num_pages + 1):
+#             # Construct the URL for the current page
+#             page_url = f"{url}&pageNumber={page_num}" if '?' in url else f"{url}?pageNumber={page_num}"
+
+#             response = requests.get(page_url, headers=headers)
+#             response.raise_for_status()  # Raise HTTPError for bad responses
+#             soup = BeautifulSoup(response.content, 'html.parser')
+
+#             # Find all review elements
+#             review_elements = soup.find_all('span', {'data-hook': 'review-body'})
+#             rating_elements = soup.find_all('i', {'data-hook': 'review-star-rating'})
+
+#             for element, rating in zip(review_elements, rating_elements):
+#                 review_text = element.get_text().strip()
+#                 # Remove Read more
+#                 review_text = review_text.replace("Read more", "").strip()
+#                 review_text = review_text.replace("Read More", "").strip()
+
+#                 # Extract rating as float from the text (e.g., "5.0 out of 5 stars")
+#                 rating_text = rating.get_text().strip()
+#                 rating_value = float(rating_text.split()[0]) if rating_text else None
+
+#                 all_reviews.append(review_text)
+#                 all_ratings.append(rating_value)
+
+#             time.sleep(1)  # Add delay to avoid being blocked
+#     except requests.exceptions.RequestException as e:
+#         st.error(f"Failed to fetch reviews from page {page_num}: {e}")
+#     except Exception as e:
+#         st.error(f"Error parsing reviews from page {page_num}: {e}")
+
+#     return all_reviews, all_ratings
+
+import requests
+from bs4 import BeautifulSoup
+import time
+#import streamlit as st  # Only if using streamlit
 
 
-# Function to scrape reviews from a given URL for a given number of pages
-def get_reviews(url, num_pages):
+def get_reviews(url, num_pages=2):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36"
     }
     all_reviews = []
-    try:
-        for page_num in range(1, num_pages + 1):
+    all_ratings = []
+
+    for page_num in range(1, num_pages + 1):
+        try:
             # Construct the URL for the current page
             page_url = f"{url}&pageNumber={page_num}" if '?' in url else f"{url}?pageNumber={page_num}"
+
+            print(f"Fetching reviews from: {page_url}") #Added for debugging
 
             response = requests.get(page_url, headers=headers)
             response.raise_for_status()  # Raise HTTPError for bad responses
@@ -119,25 +166,58 @@ def get_reviews(url, num_pages):
 
             # Find all review elements
             review_elements = soup.find_all('span', {'data-hook': 'review-body'})
+            rating_elements = soup.find_all('i', {'data-hook': 'review-star-rating'})
 
-            for element in review_elements:
+            # Check if review elements are found
+            if not review_elements:
+                print(f"No review elements found on page {page_num}.  Check the URL and selectors.") #Added for debugging
+                continue # Skip to the next page if no reviews are found
+                #break #If you want to stop as soon as you can't find reviews.
+
+
+            for element, rating in zip(review_elements, rating_elements):
                 review_text = element.get_text().strip()
                 # Remove Read more
                 review_text = review_text.replace("Read more", "").strip()
                 review_text = review_text.replace("Read More", "").strip()
-                review_text = review_text.replace("Read more", "").strip()
+
+                # Extract rating as float from the text (e.g., "5.0 out of 5 stars")
+                rating_text = rating.get_text().strip()
+                rating_value = float(rating_text.split()[0]) if rating_text else None
 
                 all_reviews.append(review_text)
+                all_ratings.append(rating_value)
+                
+                #print(f"Review: {review_text[:50]}... Rating: {rating_value}") # Added for debugging
 
             time.sleep(1)  # Add delay to avoid being blocked
-    except requests.exceptions.RequestException as e:
-        st.error(f"Failed to fetch reviews from page {page_num}: {e}")
-    except Exception as e:
-        st.error(f"Error parsing reviews from page {page_num}: {e}")
 
-    return all_reviews
+        except requests.exceptions.RequestException as e:
+            print(f"Failed to fetch reviews from page {page_num}: {e}")  # Use print instead of st.error
+            #st.error(f"Failed to fetch reviews from page {page_num}: {e}")  # Use print instead of st.error
+            break # stop if the connection fails, no point continuing.
+        except Exception as e:
+            print(f"Error parsing reviews from page {page_num}: {e}") # Use print instead of st.error
+            #st.error(f"Error parsing reviews from page {page_num}: {e}")  # Use print instead of st.error
+            break # stop if there's a parsing error, no point continuing.
+
+    return all_reviews, all_ratings
 
 
+# Example usage (replace with your actual URL)
+if __name__ == '__main__':
+    url = "https://www.amazon.com/product-reviews/B07G15D7XG" #Replace with your URL
+    reviews, ratings = get_reviews(url, num_pages=5)  # Fetch 5 pages of reviews
+
+    print(f"Number of reviews: {len(reviews)}")
+    print(f"Number of ratings: {len(ratings)}")
+
+    if reviews:
+        print("\nSome example reviews:")
+        for i in range(min(5, len(reviews))):  # Print the first 5 reviews
+            print(f"Review {i+1}: {reviews[i][:100]}...") #Print the first 100 characters
+            print(f"Rating {i+1}: {ratings[i]}")
+            
 # Function to create a word cloud from text
 def create_wordcloud(text):
     wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text)
@@ -145,7 +225,6 @@ def create_wordcloud(text):
     plt.imshow(wordcloud, interpolation='bilinear')
     plt.axis('off')
     st.pyplot(plt)
-
 
 # Function to create a pie chart from sentiment analysis
 def create_pie_chart(sentiments):
@@ -187,7 +266,6 @@ def display_sentiment_box(sentiment):
 
     st.markdown(f'<div style="background-color:{color_code}; color:white; padding:5px; border-radius:5px;">{sentiment}</div>', unsafe_allow_html=True)
 
-
 # Main App
 st.title("SentiMart📦: Amazon Sentiment App")
 
@@ -195,13 +273,11 @@ st.title("SentiMart📦: Amazon Sentiment App")
 if 'expanded_reviews' not in st.session_state:
     st.session_state.expanded_reviews = {}
 
-
 # Home Page
 def home():
     st.subheader("Welcome to the Product Review and Sentiment Analysis App")
     st.image("image.jpg", use_container_width=True)
     st.write("Use the navigation menu to write a review, search for a product, or enter an Amazon product URL.")
-
 
 # Write a Review Page
 def write_review():
@@ -234,11 +310,8 @@ def search_product():
             st.write(f"**Rating:** {product_details['rating']}")
             st.write(f"**Price:** {product_details['sales_price']}")
 
-            # Number of pages to scrape (using slider)
-            num_pages_to_scrape = st.slider("Number of Review Pages to Scrape:", min_value=1, max_value=10, value=5, step=1)
-
             # Display word cloud of reviews
-            reviews = get_reviews(product_details['product_url'], num_pages_to_scrape) #Get reviews for specified nummber of pages
+            reviews, ratings = get_reviews(product_details['product_url']) # Get reviews (default 2 pages)
             if reviews:
                 all_reviews_text = " ".join(reviews)
                 create_wordcloud(all_reviews_text)
@@ -252,33 +325,16 @@ def search_product():
                 # Display bar chart of sentiments
                 create_bar_chart(sentiments)
 
-                # Display reviews with sentiment
+                # Display reviews with sentiment and rating
                 st.write("**Reviews:**")
-                for i, review in enumerate(reviews):
+                for review, rating in zip(reviews, ratings):
                     compound_score = get_sentiment(review)
                     sentiment = classify_sentiment(compound_score)
 
-                    truncated_review = truncate_text(review)
-                    review_key = f"review_{i}"
-
-                    if review_key not in st.session_state.expanded_reviews:
-                        st.session_state.expanded_reviews[review_key] = False
-
-                    if len(review) > 200:
-                        if st.session_state.expanded_reviews[review_key]:
-                            st.write(f"**Review:** {review}")
-                            if st.button("Read Less", key=f"less_{i}"):
-                                st.session_state.expanded_reviews[review_key] = False
-                                st.experimental_rerun()
-                        else:
-                            st.write(f"**Review:** {truncated_review}")
-                            if st.button("Read More", key=f"more_{i}"):
-                                st.session_state.expanded_reviews[review_key] = True
-                                st.experimental_rerun()
-                    else:
-                        st.write(f"**Review:** {review}")
+                    st.write(f"**Review:** {review}")
+                    display_star_rating(rating)  # Display star rating
                     st.write("**Sentiment:**")
-                    display_sentiment_box(sentiment) #Display sentiment in colored box
+                    display_sentiment_box(sentiment)  # Display sentiment in colored box
                     st.write("---")
                 st.write(f"**Total Reviews Found:** {len(reviews)}")
             else:
@@ -289,64 +345,38 @@ def enter_product_url():
     st.subheader("Enter Amazon Product URL")
     product_url = st.text_input("Enter the Amazon product URL:")
 
-    #Take input after user enter URL
     if product_url:
-
-        num_pages_to_scrape = st.slider("Number of Review Pages to Scrape:", min_value=1, max_value=10, value=5, step=1)
-
         if st.button("Fetch Reviews"):
-            if product_url:
-                reviews = get_reviews(product_url, num_pages_to_scrape) #Get reviews for specified nummber of pages
-                if reviews:
-                    all_reviews_text = " ".join(reviews)
-                    create_wordcloud(all_reviews_text)
+            reviews, ratings = get_reviews(product_url) # Get reviews (default 2 pages)
+            if reviews:
+                all_reviews_text = " ".join(reviews)
+                create_wordcloud(all_reviews_text)
 
-                    # Create sentiments
-                    sentiments = pd.Series([classify_sentiment(get_sentiment(review)) for review in reviews])
+                # Create sentiments
+                sentiments = pd.Series([classify_sentiment(get_sentiment(review)) for review in reviews])
 
-                    # Display pie chart of sentiments
-                    create_pie_chart(sentiments)
+                # Display pie chart of sentiments
+                create_pie_chart(sentiments)
 
-                    # Display bar chart of sentiments
-                    create_bar_chart(sentiments)
+                # Display bar chart of sentiments
+                create_bar_chart(sentiments)
 
-                    # Display reviews with sentiment
-                    st.write("**Reviews:**")
-                    for i, review in enumerate(reviews):
-                        compound_score = get_sentiment(review)
-                        sentiment = classify_sentiment(compound_score)
+                # Display reviews with sentiment and rating
+                st.write("**Reviews:**")
+                for review, rating in zip(reviews, ratings):
+                    compound_score = get_sentiment(review)
+                    sentiment = classify_sentiment(compound_score)
 
-                        truncated_review = truncate_text(review)
-                        review_key = f"review_{i}"
-
-                        if review_key not in st.session_state.expanded_reviews:
-                            st.session_state.expanded_reviews[review_key] = False
-
-                        if len(review) > 200:
-                            if st.session_state.expanded_reviews[review_key]:
-                                st.write(f"**Review:** {review}")
-                                if st.button("Read Less", key=f"less_{i}"):
-                                    st.session_state.expanded_reviews[review_key] = False
-                                    st.experimental_rerun()
-                            else:
-                                st.write(f"**Review:** {truncated_review}")
-                                if st.button("Read More", key=f"more_{i}"):
-                                    st.session_state.expanded_reviews[review_key] = True
-                                    st.experimental_rerun()
-                        else:
-                            st.write(f"**Review:** {review}")
-                        st.write("**Sentiment:**")
-                        display_sentiment_box(sentiment) #Display sentiment in colored box
-                        st.write("---")
-                    #Shows how much reviews found
-                    st.write(f"**Total Reviews Found:** {len(reviews)}")
-
-                else:
-                    st.write("No reviews found.")
+                    st.write(f"**Review:** {review}")
+                    display_star_rating(rating)  # Display star rating
+                    st.write("**Sentiment:**")
+                    display_sentiment_box(sentiment)  # Display sentiment in colored box
+                    st.write("---")
+                st.write(f"**Total Reviews Found:** {len(reviews)}")
             else:
-                st.write("Please enter a valid Amazon product URL.")
-    else:
-        st.write("Please enter a valid Amazon product URL.")
+                st.write("No reviews found.")
+        else:
+            st.write("Please enter a valid Amazon product URL.")
 
 # Import CSV Page
 def import_csv():
@@ -380,7 +410,7 @@ def import_csv():
                 st.write(f"**Review:** {row['review']}")
                 display_star_rating(row['rating'])
                 st.write("**Sentiment:**")
-                display_sentiment_box(row['sentiment']) #Display sentiment in colored box
+                display_sentiment_box(row['sentiment']) # Display sentiment in colored box
                 st.write("---")
             st.write(f"**Total Reviews Analyzed:** {len(user_df)}")
 
